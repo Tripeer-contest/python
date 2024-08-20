@@ -42,3 +42,10 @@ class SpotDetail(Base):
     created_time = Column(String(14), nullable=True)
     modified_time = Column(String(14), nullable=True)
     booktour = Column(String(5), nullable=True)
+
+
+class SpotDescription(Base):
+    __tablename__ = 'spot_description'
+    spot_info_id = Column(Integer, primary_key=True, autoincrement=True)
+    overview = Column(String(10000), nullable=False)
+    summary = Column(String(100), nullable=False)
