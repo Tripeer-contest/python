@@ -2,15 +2,29 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
-from domain.crowing import schema
-from models import Question
+from domain.recommend import service
 
 router = APIRouter(
-    prefix="/py/test",
+    prefix="/recommend",
 )
 
 
-@router.get("/list", response_model=list[schema.Question])
-def question_list(db: Session = Depends(get_db)):
-    _question_list = db.query(Question).order_by(Question.create_date.desc()).all()
-    return _question_list
+@router.get("/summary")
+def make_summary(db: Session = Depends(get_db)):
+    res = service.make_summary(db)
+    return res
+
+@router.get("/keyword")
+def make_summary(db: Session = Depends(get_db)):
+    res = service.make_spot_keyword(db)
+    return res
+
+@router.get("/check")
+def check_keywords(db: Session = Depends(get_db)):
+    res = service.ckeck_keywords(db)
+    return res
+
+@router.get("/test")
+def test(db: Session = Depends(get_db)):
+    res = service.test()
+    return res

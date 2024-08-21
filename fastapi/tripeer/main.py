@@ -1,10 +1,12 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from starlette.middleware.cors import CORSMiddleware
+
+from domain.trend import router as trend_router
 from domain.crowing import router as crowing_router
 from domain.tourapi import router as tourapi_router
-from domain.trend import router as trend_router
+from domain.recommend import router as recommend_router
 from domain.tourapi.scheduler import scheduler as tourapi_scheduler
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app):
@@ -26,6 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(tourapi_router.router)
-app.include_router(crowing_router.router)
 app.include_router(trend_router.router)
+app.include_router(crowing_router.router)
+app.include_router(tourapi_router.router)
+app.include_router(recommend_router.router)
