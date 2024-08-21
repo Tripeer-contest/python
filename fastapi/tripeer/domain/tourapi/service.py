@@ -1,9 +1,7 @@
 import os
-import json
 import requests
 from models import Question, SpotInfo, SpotDetail, SpotDescription
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,9 +16,9 @@ def get_question_list(db: Session):
     return question_list
 
 def test():
-    spot_id = 3349647
-    url = f"{BASE_URL}/detailCommon1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
-        f"&MobileApp=appName&overviewYN=Y&contentId={spot_id}&_type=json"
+    spot_id = 228854
+    url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
+        f"&MobileApp=appName&contentId={spot_id}&_type=json&contentTypeId=12"
     
     response = requests.get(url)
     return response.json() 
@@ -84,6 +82,40 @@ def get_spot_info(db: Session):
 
 # tourAPI 에서 관광지 설명(spot_description)를 받아 db에 저장 
 def get_spot_description(db: Session):
+    spot_list = db.query(SpotInfo)\
+        .order_by(SpotInfo.spot_info_id.desc())\
+        .all()
+    count = 0
+    # api가 하루 1000개까지 가능
+    for spot in spot_list:
+        # 관광공사데이터에 무결성 이슈가 있음
+        try:
+            if count > 900:
+                break
+            spot_id = spot.spot_info_id
+            # 기존에 설명이 있으면 pass
+            if db.query(SpotDescription).filter(SpotDescription.spot_info_id == spot_id).first():
+                continue
+            url = f"{BASE_URL}/detailCommon1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
+                f"&MobileApp=tripeer&overviewYN=Y&contentId={spot_id}&_type=json"
+            response = requests.get(url)
+            data = response.json()
+            overview = data.get("response", {}).get("body", {}).get("items", {}).get("item")[0].get("overview")
+            new_spot_description = SpotDescription(
+                    spot_info_id=spot_id,
+                    overview=overview,
+                    summary=" "
+                )
+            db.add(new_spot_description)
+            db.commit()
+            count += 1
+        except:
+            db.rollback()
+    return {"count":count, "last_spot_id" :spot_id}
+       
+
+# tourAPI 에서 관광지 설명(spot_description)를 받아 db에 저장 
+def get_spot_deteail(db: Session):
     spot_list = db.query(SpotInfo)\
         .order_by(SpotInfo.spot_info_id.desc())\
         .all()
