@@ -4,6 +4,7 @@ from models import (
     FoodDetail, ShoppingDetail
 )
 
+# 데이터 받아 content_type에 따라 알맞은 모델 반환
 def make_model_from_detail_info(spot_id, content_type, data):
     if content_type == 12:
         res = TourismDetail(
