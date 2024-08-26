@@ -6,7 +6,7 @@ from pymongo import ASCENDING
 
 from database import get_mongo
 from .variable import trend_dict, trend_dict2
-from domain.recommend.variable import union_values
+from domain.recommend.variable import union_values, test_list
 
 mongodb = get_mongo()
 ct_collection = mongodb['trending_city_town']
@@ -27,19 +27,18 @@ def test():
     unix_timestamp = now_kst.timestamp() * 1000
     for (city_id, town_id) in trend_dict:
         keyword = trend_dict2.get((city_id, town_id))
-        url = f"https://ma-pia.net/analysis/api/naver/month_search_ratio.php?keyword={keyword}여행&time={unix_timestamp}"
+        url = f"https://ma-pia.net/analysis/api/naver/month_search_ratio.php?keyword={keyword}가볼만한곳&time={unix_timestamp}"
         response = requests.get(url)
         data = response.json()
         pc_data = data.get('result').get('Pc')
         mobile_data = data.get('result').get('Mobile')
         today_avg = int(pc_data[-1].get('searchCnt')) + int(mobile_data[-1].get('searchCnt'))
-        pc_sum = sum(map(lambda x: int(x.get('searchCnt')),pc_data))
-        mobile_sum = sum(map(lambda x: int(x.get('searchCnt')),mobile_data))
-        total_avg = (int(pc_sum) + int(mobile_sum)) // 12
+        pc_avg = sum(map(lambda x: int(x.get('searchCnt')),pc_data)) // len(pc_data)
+        mobile_avg = sum(map(lambda x: int(x.get('searchCnt')),mobile_data)) // len(mobile_data)
+        total_avg = pc_avg + mobile_avg
         query = {"city_id": city_id, "town_id": town_id}
         document = {"city_id": city_id, "town_id": town_id, "name":keyword, "total_avg": total_avg, "today_avg" :today_avg }
-        # collection.update_one(query, {"$set": document})
-        ct_collection.insert_one(document)
+        ct_collection.update_one(query, {"$set": document})
     return "성공"
 
 
@@ -54,8 +53,8 @@ def test2():
     now_kst = now.astimezone(kst)
     # Unix 시간 스탬프로 변환 (밀리초 단위)
     unix_timestamp = now_kst.timestamp() * 1000
-    for keyword in union_values:
-        url = f"https://ma-pia.net/analysis/api/naver/month_search_ratio.php?keyword={keyword}여행&time={unix_timestamp}"
+    for keyword in test_list:
+        url = f"https://ma-pia.net/analysis/api/naver/month_search_ratio.php?keyword={keyword}&time={unix_timestamp}"
         response = requests.get(url)
         data = response.json()
         mobile_data = data.get('result').get('Mobile')
@@ -68,7 +67,7 @@ def test2():
             today_avg = 0
         query = {"keyword": keyword}
         document = { "keyword":keyword, "total_avg": total_avg, "today_avg" :today_avg }
-        # collection.update_one(query, {"$set": document})
+        # keyword_collection.update_one(query, {"$set": document})
         keyword_collection.insert_one(document)
     return "성공"
 

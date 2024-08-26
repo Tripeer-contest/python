@@ -19,7 +19,7 @@ def get_question_list(db: Session):
 def test():
     spot_id = 2731170
     url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
-        f"&MobileApp=appName&contentId={spot_id}&_type=json&contentTypeId=28"
+        f"&MobileApp=tripeer&contentId={spot_id}&_type=json&contentTypeId=28"
     
     response = requests.get(url)
     return response.json() 
@@ -31,7 +31,7 @@ def get_spot_info(db: Session):
     pageNo = 1
     numOfRows = 53056
     url = f"{BASE_URL}/areaBasedList1?serviceKey={serviceKey}&MobileOS=AND" \
-        f"&MobileApp=appName&pageNo={pageNo}&numOfRows={numOfRows}&_type=json"
+        f"&MobileApp=tripeer&pageNo={pageNo}&numOfRows={numOfRows}&_type=json"
     
     response = requests.get(url)
     data = response.json()

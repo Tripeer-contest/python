@@ -11,3 +11,16 @@ class Question(BaseModel):
     
     class Config:
         orm_mode = True
+
+class SpotInfoResponse(BaseModel):
+    spotInfoId: int
+    title: str
+    contentType: str
+    addr: str
+    latitude: float
+    longitude: float
+    img: str
+    isWishlist: bool
+    spot: bool
+    recommended_comment: str
+    keyword:str
