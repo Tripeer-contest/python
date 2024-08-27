@@ -1,6 +1,7 @@
 import os
 import requests
 from models import Question, SpotInfo, SpotDetail, SpotDescription
+from domain.tourapi.func import make_model_from_detail_info
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
@@ -16,9 +17,9 @@ def get_question_list(db: Session):
     return question_list
 
 def test():
-    spot_id = 228854
+    spot_id = 2731170
     url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
-        f"&MobileApp=appName&contentId={spot_id}&_type=json&contentTypeId=12"
+        f"&MobileApp=appName&contentId={spot_id}&_type=json&contentTypeId=28"
     
     response = requests.get(url)
     return response.json() 
@@ -131,7 +132,7 @@ def get_spot_deteail(db: Session):
             if db.query(SpotDescription).filter(SpotDescription.spot_info_id == spot_id).first():
                 continue
             url = f"{BASE_URL}/detailCommon1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
-                f"&MobileApp=appName&overviewYN=Y&contentId={spot_id}&_type=json"
+                f"&MobileApp=tripeer&overviewYN=Y&contentId={spot_id}&_type=json"
             response = requests.get(url)
             data = response.json()
             overview = data.get("response", {}).get("body", {}).get("items", {}).get("item")[0].get("overview")
@@ -146,4 +147,32 @@ def get_spot_deteail(db: Session):
         except:
             db.rollback()
     return {"count":count, "last_spot_id" :spot_id}
-       
+
+# tourAPI 에서 관광지 상세정보(spot_detail_info)를 받아 db에 저장 
+def get_deteail_info(db: Session):
+    spot_list = db.query(SpotInfo)\
+        .order_by(SpotInfo.spot_info_id.desc())\
+        .all()
+    count = 0
+    # api가 하루 1000개까지 가능
+    for spot in spot_list:
+        count += 1
+        if count > 10:
+            break
+        # 관광공사데이터에 무결성 이슈가 있음
+        spot_id = spot.spot_info_id
+        content_type_id = spot.content_type_id
+        if spot.mlevel == 11:
+            continue
+        url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=WIN" \
+            f"&MobileApp=tripeer&contentId={spot_id}&_type=json&contentTypeId={content_type_id}"
+        response = requests.get(url)
+        data = response.json()
+        detail_info_data = data.get("response", {}).get("body", {}).get("items", {}).get("item")[0]
+        print(detail_info_data)
+        new_detail_info = make_model_from_detail_info(spot_id, content_type_id, detail_info_data)
+        db.add(new_detail_info)
+        db.commit()
+
+    return {"count":count, "last_spot_id" :spot_id}
+    

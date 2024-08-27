@@ -9,7 +9,6 @@ router = APIRouter(
     prefix="/tour",
 )
 
-
 @router.get("/list", response_model=list[schema.Question])
 async def question_list(db: Session = Depends(get_db)):
     _question_list = service.get_question_list()
@@ -28,4 +27,9 @@ async def save_spot_info(db: Session = Depends(get_db)):
 @router.get("/spot/desc")
 async def save_spot_description(db: Session = Depends(get_db)):
     res = service.get_spot_description(db)
+    return res
+
+@router.get("/spot/detail")
+async def save_spot_description(db: Session = Depends(get_db)):
+    res = service.get_deteail_info(db)
     return res
