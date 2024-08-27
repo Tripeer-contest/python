@@ -8,14 +8,18 @@ router = APIRouter(
     prefix="/trend",
 )
 
-@router.get("/test")
-def test():
-    res = service.test()
+@router.get("/city")
+def save_city_town_trend():
+    res = service.save_city_town_trend()
     return res
 
 
-# 검색어 리스트로 관련 검색어 확인 
-@router.get("/test2")
-def test2():
-    service.test2()
+@router.get("/keyword")
+def save_keyword_trend():
+    service.save_keyword_trend()
+    return "성공"
+
+@router.get("/test")
+def test():
+    service.test()
     return "성공"

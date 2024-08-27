@@ -26,12 +26,12 @@ def check_keywords(db: Session = Depends(get_db)):
     return res
 
 @router.get("/test")
-def test(db: Session = Depends(get_db)):
-    res = service.test()
+def test(userId: int, cityId: int, townId: int, contentType: int, db: Session = Depends(get_db)):
+    res = service.get_home_recommend(userId,cityId,townId,contentType,db)
     return res
 
 @router.get("/home")
-def get_home_recommend(request: Request, cityId: int, townId: int, contentType, db: Session = Depends(get_db)):
+def get_home_recommend(request: Request, cityId: int, townId: int, contentType: int, db: Session = Depends(get_db)):
     token = request.headers.get("Authorization").split()[1]
     payload = jwt.decode(token, options={"verify_signature": False})
     user_id = payload.get('userId')
@@ -40,7 +40,7 @@ def get_home_recommend(request: Request, cityId: int, townId: int, contentType, 
 
 @router.get("/")
 def get_custom_recommend(db: Session = Depends(get_db)):
-    res = service.get_custom_recommend(6, db)
+    res = service.get_custom_recommend(6,1,1, db)
     return res
 
 @router.get("/mongo")

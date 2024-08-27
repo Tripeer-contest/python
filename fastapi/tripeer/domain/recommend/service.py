@@ -11,7 +11,7 @@ from konlpy.tag import Okt
 from sentence_transformers import SentenceTransformer, util
 
 from models import SpotInfo, SpotDetail, SpotDescription, User, Wishlist, PlanBucket
-from .variable import stop_list, city_town_list, cat2, cat3, union_values, my_keywords_list, city_id_list
+from .variable import stop_list, city_town_list, cat2, cat3, union_values, my_keywords_list, city_id_list, lodging_reversed_dict, food_reversed_dict
 from .schema import SpotInfoResponse
 
 mongodb = get_mongo()
@@ -131,14 +131,14 @@ def ckeck_keywords(db: Session):
     return sorted_freq
 
 # 내가 만든 키워드로 추천해주는 로직(tripeer 1.0에 추천 로직)
-def get_custom_recommend(user_id,db: Session):
+def get_custom_recommend(user_id, city_id, town_id ,db: Session):
     user = db.query(User).filter(User.user_id == user_id).first()
     user_styles = [style for style in (user.style1, user.style2) if style]
     keywordBlackList = user_styles
 
     wish_list = db.query(Wishlist).filter(Wishlist.user_id == user_id).all()
-    spot_ids = list(map(lambda x : x.spot_info_id, wish_list))
-    spot_descriptions = db.query(SpotDescription).filter(SpotDescription.spot_info_id.in_(spot_ids)).all()
+    wish_spot_ids = list(map(lambda x : x.spot_info_id, wish_list))
+    spot_descriptions = db.query(SpotDescription).filter(SpotDescription.spot_info_id.in_(wish_spot_ids)).all()
     spot_keywords = []
     for el in spot_descriptions: 
         spot_keywords.extend(el.summary.split())
@@ -154,12 +154,12 @@ def get_custom_recommend(user_id,db: Session):
     res = {
         'wishlist1': [],
         'wishlist2': [],
-        'bucket1': [],
-        'bucket2': [],
         'style1': [],
         'style2': [],
-        'hotbucket': [],
-        'hotwish': []
+        'hotwish1': [],
+        'hotwish2': [],
+        'hotbucket1': [],
+        'hotbucket2': []
     }
 
     keyword_dict = {
@@ -172,79 +172,158 @@ def get_custom_recommend(user_id,db: Session):
         'hotbucket1': hot_bucket_keywords_two[0],
         'hotbucket2': hot_bucket_keywords_two[1]
     }
+    for el in keyword_dict:
+        keyword = keyword_dict.get(el)
+        if not keyword:
+            continue
+        document = collection.find_one({'city_id': city_id, 'town_id': town_id, 'keyword': keyword}, {'_id': 0, 'value': 1})
+        spot_id_list = document['value']
+        spot_list = spot_list = db.query(SpotInfo)\
+                    .filter(SpotInfo.spot_info_id.in_(spot_id_list))\
+                    .all()
+        for spot in spot_list:
+            spot_info_res = SpotInfoResponse(
+                    spotInfoId= spot.spot_info_id,
+                    title= spot.title,
+                    contentType= str(spot.content_type_id),
+                    addr= spot.addr1,
+                    latitude= spot.latitude,
+                    longitude= spot.longitude,
+                    img= spot.first_image,
+                    isWishlist= spot.spot_info_id in wish_spot_ids,
+                    spot=False,
+                    recommended_comment= el,
+                    keyword=keyword
+            )
+            res[el].append(spot_info_res)
+    result = {
+        "res": res,
+        "keyword_dict": keyword_dict,
+    }
+    return result
 
-    print(keyword_dict)
-    
-    # for el in plan_town_list:
-    #     city_id = el.city_only_id if el.city_only_id else el.city_id
-    #     town_id = -1 if el.city_only_id else el.town_id
+# 숙소 추천 로직(커스텀 키워드 추가 필요)
+# 숙소 데이터 부족한 것 같음
+def get_lodging_recommend(user_id, city_id, town_id ,db: Session):
+    wish_list = db.query(Wishlist).filter(Wishlist.user_id == user_id).all()
+    wish_spot_ids = list(map(lambda x : x.spot_info_id, wish_list))
+    keyword_dict = {
+        'basic1': '관광호텔',
+        'basic2': '콘도미니엄',
+        'basic3': '유스호스텔',
+        'basic4': '펜션',
+        'basic5': '모텔',
+        'basic6': '게스트하우스',
+        'basic7': '홈스테이',
+        'basic8': '서비스드레지던스',
+        'basic8': '한옥',
+    }
+    response = {
+        'basic1': [],
+        'basic2': [],
+        'basic3': [],
+        'basic4': [],
+        'basic5': [],
+        'basic6': [],
+        'basic7': [],
+        'basic8': [],
+        'basic8': [],
+    }
 
-    #     embedding_path = f"csv/{city_id}/{town_id}/embedding.csv"
-    #     loaded_df = pd.read_csv(embedding_path, delimiter=",", dtype=np.float32)
-    #     loaded_tensor = torch.tensor(loaded_df.values)
-    #     id_list = np.loadtxt(f"csv/{city_id}/{town_id}/id_list.csv", delimiter=",")
+    if city_id == -1 and town_id == -1:
+        res = db.query(SpotInfo, SpotDetail)\
+            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+            .filter(SpotInfo.content_type_id == 32).all()
+    elif city_id != -1 and town_id == -1:
+        res = db.query(SpotInfo, SpotDetail)\
+            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+            .filter(SpotInfo.city_id == city_id)\
+            .filter(SpotInfo.content_type_id == 32).all()
+    elif city_id != -1 and town_id != -1:
+        res = db.query(SpotInfo, SpotDetail)\
+            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+            .filter(SpotInfo.city_id == city_id)\
+            .filter(SpotInfo.town_id == town_id)\
+            .filter(SpotInfo.content_type_id == 32).all()
+    for (spot, spot_detail) in res:
+        spot_info_res = SpotInfoResponse(
+                spotInfoId= spot.spot_info_id,
+                title= spot.title,
+                contentType= str(spot.content_type_id),
+                addr= spot.addr1,
+                latitude= spot.latitude,
+                longitude= spot.longitude,
+                img= spot.first_image,
+                isWishlist= spot.spot_info_id in wish_spot_ids,
+                spot=False,
+                recommended_comment= lodging_reversed_dict[cat3[spot_detail.cat3]],
+                keyword=cat3[spot_detail.cat3]
+            )
+        print(cat3[spot_detail.cat3])
+        response.get(lodging_reversed_dict[cat3[spot_detail.cat3]]).append(spot_info_res)
+    return response
 
-    #     for i, wishlist_keyword in enumerate(wishlist_top_two):
-    #         mongodb_data = read_data(city_id, town_id, wishlist_keyword)
-    #         if mongodb_data:
-    #             res[f'wishlist{i+1}'].extend(mongodb_data)
+# 음식 추천 로직(커스텀 키워드 추가 필요)
+def get_food_recommend(user_id, city_id, town_id ,db: Session):
+    wish_list = db.query(Wishlist).filter(Wishlist.user_id == user_id).all()
+    wish_spot_ids = list(map(lambda x : x.spot_info_id, wish_list))
+    keyword_dict = {
+        'basic1': '한식',
+        'basic2': '서양식',
+        'basic3': '일식',
+        'basic4': '중식',
+        'basic5': '이색음식점',
+        'basic6': '카페/전통찻집',
+        'basic7': '클럽',
+    }
+    response = {
+        'basic1': [],
+        'basic2': [],
+        'basic3': [],
+        'basic4': [],
+        'basic5': [],
+        'basic6': [],
+        'basic7': [],
+    }
 
-    #     for i, bucket_keyword in enumerate(bucket_top_two):
-    #         mongodb_data = read_data(city_id, town_id, bucket_keyword)
-    #         if mongodb_data:
-    #             res[f'bucket{i+1}'].extend(mongodb_data)
-
-    #     for i, style_keyword in enumerate(user_styles):
-    #         mongodb_data = read_data(city_id, town_id, style_keyword)
-    #         if mongodb_data:
-    #             res[f'style{i+1}'].extend(mongodb_data)
-        
-        
-    #     mongodb_data = read_data(city_id, town_id, most_wish_keyword)
-    #     if mongodb_data:
-    #         res['hotwish'].extend(mongodb_data)
-            
-    #     mongodb_data = read_data(city_id, town_id, most_bucket_keyword)
-    #     if mongodb_data:
-    #         res['hotwish'].extend(mongodb_data)
-    
-    
-    # final_data = []
-    # for key, value in res.items():
-    #     if value:
-    #         response_data = []
-    #         value = sorted(value, key=lambda x: x[1], reverse=True)
-    #         for el in value[:15]:
-    #             if el[0] in black_list:
-    #                 continue
-    #             spot_info = db.query(SpotInfo).filter(SpotInfo.spot_info_id == int(el[0])).first()
-                
-    #             if spot_info:
-    #                 spot_info_res = SpotInfoResponse(
-    #                     spotInfoId=spot_info.spot_info_id,
-    #                     contentType=content_type_dic.get(spot_info.content_type_id, "Unknown"),
-    #                     title=spot_info.title,
-    #                     addr=spot_info.addr1,
-    #                     img=spot_info.first_image,
-    #                     latitude=float(spot_info.latitude),
-    #                     longitude=float(spot_info.longitude),
-    #                     isWishlist=False,
-    #                     spot=False,
-    #                     recommended_comment=f"{key}에서 찾은 키워드 '{keyword_dict[key]}'과 관련된 관광지",
-    #                     keyword=str(keyword_dict[key])
-    #                 )
-    #                 response_data.append(spot_info_res)
-    #         recommend_response = RecommendResponse(
-    #             main=keyword_dict[key],
-    #             sub=key,
-    #             spotItemList=response_data
-    #         )
-    #         final_data.append(recommend_response)
-
-    return "final_data"
+    if city_id == -1 and town_id == -1:
+        res = db.query(SpotInfo, SpotDetail)\
+            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+            .filter(SpotInfo.content_type_id == 39).all()
+    elif city_id != -1 and town_id == -1:
+        res = db.query(SpotInfo, SpotDetail)\
+            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+            .filter(SpotInfo.city_id == city_id)\
+            .filter(SpotInfo.content_type_id == 39).all()
+    elif city_id != -1 and town_id != -1:
+        res = db.query(SpotInfo, SpotDetail)\
+            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+            .filter(SpotInfo.city_id == city_id)\
+            .filter(SpotInfo.town_id == town_id)\
+            .filter(SpotInfo.content_type_id == 39).all()
+    for (spot, spot_detail) in res:
+        if cat3[spot_detail.cat3] not in food_reversed_dict:
+            continue
+        spot_info_res = SpotInfoResponse(
+                spotInfoId= spot.spot_info_id,
+                title= spot.title,
+                contentType= str(spot.content_type_id),
+                addr= spot.addr1,
+                latitude= spot.latitude,
+                longitude= spot.longitude,
+                img= spot.first_image,
+                isWishlist= spot.spot_info_id in wish_spot_ids,
+                spot=False,
+                recommended_comment= food_reversed_dict[cat3[spot_detail.cat3]],
+                keyword=cat3[spot_detail.cat3]
+            )
+        print(cat3[spot_detail.cat3])
+        response.get(food_reversed_dict[cat3[spot_detail.cat3]]).append(spot_info_res)
+    return response
 
 
 # 각 시도, 타운, 키워드 기준 추천 리스트를 미리만들어 몽고db에 저장
+# 갯수로 저장하는 것이 아닌 정확도를 기준으로 커트해야함
 # 반복되는 부분 함수로 따로 빼기
 def save_mongo(db: Session):
     for city_id, town_id in city_town_list:
@@ -330,27 +409,12 @@ def save_mongo(db: Session):
 
 
 def get_home_recommend(user_id, city_id, town_id, content_type, db: Session):
-    if city_id == -1 and town_id == -1 and content_type == -1:
-        res = db.query(SpotInfo, SpotDetail)\
-            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
-            .all()
-    elif city_id != -1 and town_id == -1:
-        res = db.query(SpotInfo, SpotDetail)\
-            .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
-            .filter(SpotInfo.spot_info_id == id).first()
-
-
-    # SQLAlchemy ORM 객체를 딕셔너리로 변환
-    spot_info, spot_detail = res
-
-    def serialize(obj):
-        return {column.name: getattr(obj, column.name) for column in obj.__table__.columns}
-
-    # JSON 직렬화 가능한 딕셔너리로 변환
-    result = {
-        "spot_info": serialize(spot_info),
-        "spot_detail": serialize(spot_detail),
-    }
+    if content_type == 39:
+        result = get_food_recommend(user_id, city_id, town_id, db)
+    elif content_type == 32:
+        result = get_lodging_recommend(user_id, city_id, town_id, db)
+    else:
+        result = get_custom_recommend(user_id, city_id, town_id, db)
     return result
 
 def test():

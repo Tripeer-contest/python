@@ -6,16 +6,14 @@ from pymongo import ASCENDING
 
 from database import get_mongo
 from .variable import trend_dict, trend_dict2
-from domain.recommend.variable import union_values, test_list
+from domain.recommend.variable import union_values, test_list, keywords_list
 
 mongodb = get_mongo()
 ct_collection = mongodb['trending_city_town']
-ct_collection.create_index([('city_id', ASCENDING), ('town_id', ASCENDING)], unique=True)
 
 keyword_collection = mongodb['trending_keyword']
-keyword_collection.create_index([('keyword', ASCENDING)], unique=True)
 # 검색어 리스트로 검색량 확인 (매달 핫한 도시 찾기에 활용)
-def test():
+def save_city_town_trend():
     now = datetime.now()
 
     # 한국 시간대 (UTC+9) 생성
@@ -43,7 +41,7 @@ def test():
 
 
 # 구글 트랜드 + 내가 찾은 우리 키워드 조합해서 인기 키워드 만들기
-def test2():
+def save_keyword_trend():
     now = datetime.now()
 
     # 한국 시간대 (UTC+9) 생성
@@ -53,8 +51,10 @@ def test2():
     now_kst = now.astimezone(kst)
     # Unix 시간 스탬프로 변환 (밀리초 단위)
     unix_timestamp = now_kst.timestamp() * 1000
-    for keyword in test_list:
-        url = f"https://ma-pia.net/analysis/api/naver/month_search_ratio.php?keyword={keyword}&time={unix_timestamp}"
+    keyword_set = set(keywords_list)
+    len(keyword_set)
+    for keyword in keyword_set:
+        url = f"https://ma-pia.net/analysis/api/naver/month_search_ratio.php?keyword={keyword}여행&time={unix_timestamp}"
         response = requests.get(url)
         data = response.json()
         mobile_data = data.get('result').get('Mobile')
@@ -71,4 +71,9 @@ def test2():
         keyword_collection.insert_one(document)
     return "성공"
 
-
+def test():
+    docs = keyword_collection.find({'total_avg': {'$ne': 0}})
+    docs_list = list(docs) 
+    keyword_list = [doc.get('keyword') for doc in docs_list]
+    print(keyword_list)
+    return
