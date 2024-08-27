@@ -1,7 +1,5 @@
 import datetime
-
 from pydantic import BaseModel
-
 
 class Question(BaseModel):
     id: int
@@ -10,4 +8,4 @@ class Question(BaseModel):
     create_date: datetime.datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True

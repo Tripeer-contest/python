@@ -19,7 +19,7 @@ def get_question_list(db: Session):
 def test():
     spot_id = 2731170
     url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
-        f"&MobileApp=appName&contentId={spot_id}&_type=json&contentTypeId=28"
+        f"&MobileApp=tripeer&contentId={spot_id}&_type=json&contentTypeId=28"
     
     response = requests.get(url)
     return response.json() 
@@ -31,7 +31,7 @@ def get_spot_info(db: Session):
     pageNo = 1
     numOfRows = 53056
     url = f"{BASE_URL}/areaBasedList1?serviceKey={serviceKey}&MobileOS=AND" \
-        f"&MobileApp=appName&pageNo={pageNo}&numOfRows={numOfRows}&_type=json"
+        f"&MobileApp=tripeer&pageNo={pageNo}&numOfRows={numOfRows}&_type=json"
     
     response = requests.get(url)
     data = response.json()
@@ -156,23 +156,26 @@ def get_deteail_info(db: Session):
     count = 0
     # api가 하루 1000개까지 가능
     for spot in spot_list:
-        count += 1
-        if count > 10:
-            break
         # 관광공사데이터에 무결성 이슈가 있음
-        spot_id = spot.spot_info_id
-        content_type_id = spot.content_type_id
-        if spot.mlevel == 11:
-            continue
-        url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=WIN" \
-            f"&MobileApp=tripeer&contentId={spot_id}&_type=json&contentTypeId={content_type_id}"
-        response = requests.get(url)
-        data = response.json()
-        detail_info_data = data.get("response", {}).get("body", {}).get("items", {}).get("item")[0]
-        print(detail_info_data)
-        new_detail_info = make_model_from_detail_info(spot_id, content_type_id, detail_info_data)
-        db.add(new_detail_info)
-        db.commit()
-
+        count += 1
+        if count > 900:
+            break
+        try:
+            spot_id = spot.spot_info_id
+            content_type_id = spot.content_type_id
+            if spot.mlevel == 11:
+                continue
+            url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=WIN" \
+                f"&MobileApp=tripeer&contentId={spot_id}&_type=json&contentTypeId={content_type_id}"
+            response = requests.get(url)
+            data = response.json()
+            detail_info_data = data.get("response", {}).get("body", {}).get("items", {}).get("item")[0]
+            print(detail_info_data)
+            new_detail_info = make_model_from_detail_info(spot_id, content_type_id, detail_info_data)
+            db.add(new_detail_info)
+            db.commit()
+        except:
+            db.rollback()
+        spot.mlevel = 11
     return {"count":count, "last_spot_id" :spot_id}
     

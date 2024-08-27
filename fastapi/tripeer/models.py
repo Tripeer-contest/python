@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, BigInteger, Date, Boolean
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -51,6 +51,36 @@ class SpotDescription(Base):
     overview = Column(String(10000), nullable=False)
     summary = Column(String(500), nullable=False)
 
+class User(Base):
+    __tablename__ = 'user'
+
+    user_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    provider = Column(String(45), nullable=False)
+    provider_id = Column(String(128), nullable=False)
+    email = Column(String(45), nullable=False)
+    nickname = Column(String(30), nullable=False)
+    birth = Column(Date, nullable=True)
+    profile_image = Column(String(255), nullable=True)
+    role = Column(String(30), nullable=False)
+    style1 = Column(String(45), nullable=True)
+    style2 = Column(String(45), nullable=True)
+    style3 = Column(String(45), nullable=True)
+    is_online = Column(Boolean, nullable=False, default=False)
+
+class Wishlist(Base):
+    __tablename__ = 'wishlist'
+
+    wishlist_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, nullable=False)
+    spot_info_id = Column(Integer, nullable=False)
+
+class PlanBucket(Base):
+    __tablename__ = 'plan_bucket'
+    
+    plan_bucket_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    plan_id = Column(BigInteger, nullable=False)
+    spot_info_id = Column(Integer, nullable=False)
+    user_id = Column(BigInteger, nullable=False)
 
 #  --------------     tourApi  (추가된 상세정보)    --------------------
 class TourismDetail(Base):
@@ -222,3 +252,4 @@ class ShoppingDetail(Base):
     sale_item_cost = Column(String(255))  # 판매 상품 가격
     scale_shopping = Column(String(255))  # 쇼핑몰 규모
     shop_guide = Column(String(255))  # 매장 안내
+

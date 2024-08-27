@@ -16,8 +16,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 client = MongoClient(MONGODB_URL)
-mongodb_db = client['python']
-mongodb = mongodb_db['recommend']
+mongodb = client['python']
 
 def get_db():
     db = SessionLocal()
