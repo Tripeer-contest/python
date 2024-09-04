@@ -85,12 +85,15 @@ def make_summary(db: Session):
     return "성공"
 
 # spot 설명에서 내가 뽑은 키워드 뽑아내는 summary에 저장하는 함수 
-# (위에 함수로 통계를 내고 실재 여행과 관련있는 키워드를 필터링하여 그 키워드가 있는지 검사)
+# (위에 함수로 통계를 내고 여행과 관련있는 키워드를 필터링하여 그 키워드가 있는지 검사)
 def make_spot_keyword(db: Session):
     spot_list = db.query(SpotDescription)\
         .order_by(SpotDescription.spot_info_id.desc())\
         .all()
+    count = 0
     for spot in spot_list:
+        count += 1
+        print(count)
         spot_detail = db.query(SpotDetail)\
         .filter(SpotDetail.spot_info_id==spot.spot_info_id)\
         .first()
@@ -121,6 +124,7 @@ def make_recommend(db: Session, collection: Collection = Depends(get_mongo)):
     
     return
 
+# 키워드 저장후 각 키워드 관련 광관지가 얼마나 있는지 통계를 내줌
 def ckeck_keywords(db: Session):
     spot_detail = db.query(SpotDescription).all()
     lst = []
@@ -176,6 +180,7 @@ def get_custom_recommend(user_id, city_id, town_id ,db: Session):
         keyword = keyword_dict.get(el)
         if not keyword:
             continue
+        print(el, keyword)
         document = collection.find_one({'city_id': city_id, 'town_id': town_id, 'keyword': keyword}, {'_id': 0, 'value': 1})
         spot_id_list = document['value']
         spot_list = spot_list = db.query(SpotInfo)\
@@ -246,6 +251,8 @@ def get_lodging_recommend(user_id, city_id, town_id ,db: Session):
             .filter(SpotInfo.town_id == town_id)\
             .filter(SpotInfo.content_type_id == 32).all()
     for (spot, spot_detail) in res:
+        if cat3[spot_detail.cat3] not in lodging_reversed_dict:
+            continue
         spot_info_res = SpotInfoResponse(
                 spotInfoId= spot.spot_info_id,
                 title= spot.title,
@@ -259,7 +266,6 @@ def get_lodging_recommend(user_id, city_id, town_id ,db: Session):
                 recommended_comment= lodging_reversed_dict[cat3[spot_detail.cat3]],
                 keyword=cat3[spot_detail.cat3]
             )
-        print(cat3[spot_detail.cat3])
         response.get(lodging_reversed_dict[cat3[spot_detail.cat3]]).append(spot_info_res)
     return response
 
@@ -317,7 +323,6 @@ def get_food_recommend(user_id, city_id, town_id ,db: Session):
                 recommended_comment= food_reversed_dict[cat3[spot_detail.cat3]],
                 keyword=cat3[spot_detail.cat3]
             )
-        print(cat3[spot_detail.cat3])
         response.get(food_reversed_dict[cat3[spot_detail.cat3]]).append(spot_info_res)
     return response
 
@@ -407,7 +412,7 @@ def save_mongo(db: Session):
     collection.insert_many(doc_list)
     return {'asd':'asd'}
 
-
+# content_type에 따라 각 타입에 맞는 추천 로직 실행
 def get_home_recommend(user_id, city_id, town_id, content_type, db: Session):
     if content_type == 39:
         result = get_food_recommend(user_id, city_id, town_id, db)
@@ -419,3 +424,30 @@ def get_home_recommend(user_id, city_id, town_id, content_type, db: Session):
 
 def test():
     return hot_wish_keywords
+
+# 추천 더보기를 위한 api
+def get_more_recommend(user_id, city_id, town_id, keyword, db: Session):
+    res = []
+    document = collection.find_one({'city_id': city_id, 'town_id': town_id, 'keyword': keyword}, {'_id': 0, 'value': 1})
+    wish_list = db.query(Wishlist).filter(Wishlist.user_id == user_id).all()
+    wish_spot_ids = list(map(lambda x : x.spot_info_id, wish_list))
+    spot_id_list = document['value']
+    spot_list = spot_list = db.query(SpotInfo)\
+                .filter(SpotInfo.spot_info_id.in_(spot_id_list))\
+                .all()
+    for spot in spot_list:
+        spot_info_res = SpotInfoResponse(
+                spotInfoId= spot.spot_info_id,
+                title= spot.title,
+                contentType= str(spot.content_type_id),
+                addr= spot.addr1,
+                latitude= spot.latitude,
+                longitude= spot.longitude,
+                img= spot.first_image,
+                isWishlist= spot.spot_info_id in wish_spot_ids,
+                spot=False,
+                recommended_comment= "",
+                keyword=keyword
+        )
+        res.append(spot_info_res)
+    return res

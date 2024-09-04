@@ -1,6 +1,6 @@
-import os
+import os, time, random
 import requests
-from models import Question, SpotInfo, SpotDetail, SpotDescription
+from models import SpotInfo, SpotDetail, SpotDescription
 from domain.tourapi.func import make_model_from_detail_info
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
@@ -10,19 +10,15 @@ load_dotenv()
 TOUR_API_KEY = os.environ.get('TOUR_API_KEY')
 BASE_URL = "http://apis.data.go.kr/B551011/KorService1"
 
-def get_question_list(db: Session):
-    question_list = db.query(Question)\
-        .order_by(Question.create_date.desc())\
+def test(db: Session):
+    # spot_id = 2731170
+    # url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
+    #     f"&MobileApp=tripeer&contentId={spot_id}&_type=json&contentTypeId=28"
+    spot_list = db.query(SpotInfo)\
+        .order_by(SpotInfo.spot_info_id.desc())\
         .all()
-    return question_list
-
-def test():
-    spot_id = 2731170
-    url = f"{BASE_URL}/detailIntro1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
-        f"&MobileApp=tripeer&contentId={spot_id}&_type=json&contentTypeId=28"
-    
-    response = requests.get(url)
-    return response.json() 
+    print(spot_list)
+    return len(spot_list)
 
 
 # tourAPI 에서 관광지 데이터(spot_info, spot_detail)를 받아 db에 저장 
@@ -86,47 +82,10 @@ def get_spot_description(db: Session):
     spot_list = db.query(SpotInfo)\
         .order_by(SpotInfo.spot_info_id.desc())\
         .all()
-    count = 0
     # api가 하루 1000개까지 가능
     for spot in spot_list:
         # 관광공사데이터에 무결성 이슈가 있음
         try:
-            if count > 900:
-                break
-            spot_id = spot.spot_info_id
-            # 기존에 설명이 있으면 pass
-            if db.query(SpotDescription).filter(SpotDescription.spot_info_id == spot_id).first():
-                continue
-            url = f"{BASE_URL}/detailCommon1?serviceKey={TOUR_API_KEY}&MobileOS=AND" \
-                f"&MobileApp=tripeer&overviewYN=Y&contentId={spot_id}&_type=json"
-            response = requests.get(url)
-            data = response.json()
-            overview = data.get("response", {}).get("body", {}).get("items", {}).get("item")[0].get("overview")
-            new_spot_description = SpotDescription(
-                    spot_info_id=spot_id,
-                    overview=overview,
-                    summary=" "
-                )
-            db.add(new_spot_description)
-            db.commit()
-            count += 1
-        except:
-            db.rollback()
-    return {"count":count, "last_spot_id" :spot_id}
-       
-
-# tourAPI 에서 관광지 설명(spot_description)를 받아 db에 저장 
-def get_spot_deteail(db: Session):
-    spot_list = db.query(SpotInfo)\
-        .order_by(SpotInfo.spot_info_id.desc())\
-        .all()
-    count = 0
-    # api가 하루 1000개까지 가능
-    for spot in spot_list:
-        # 관광공사데이터에 무결성 이슈가 있음
-        try:
-            if count > 900:
-                break
             spot_id = spot.spot_info_id
             # 기존에 설명이 있으면 pass
             if db.query(SpotDescription).filter(SpotDescription.spot_info_id == spot_id).first():
@@ -148,18 +107,14 @@ def get_spot_deteail(db: Session):
             db.rollback()
     return {"count":count, "last_spot_id" :spot_id}
 
-# tourAPI 에서 관광지 상세정보(spot_detail_info)를 받아 db에 저장 
+# tourAPI 에서 관광지 상세정보(spot_additional)를 받아 db에 저장 
 def get_deteail_info(db: Session):
     spot_list = db.query(SpotInfo)\
         .order_by(SpotInfo.spot_info_id.desc())\
         .all()
-    count = 0
-    # api가 하루 1000개까지 가능
     for spot in spot_list:
+        time.sleep(random.uniform(0.3, 1.5))
         # 관광공사데이터에 무결성 이슈가 있음
-        count += 1
-        if count > 900:
-            break
         try:
             spot_id = spot.spot_info_id
             content_type_id = spot.content_type_id
@@ -173,9 +128,42 @@ def get_deteail_info(db: Session):
             print(detail_info_data)
             new_detail_info = make_model_from_detail_info(spot_id, content_type_id, detail_info_data)
             db.add(new_detail_info)
+            spot.mlevel = 11
             db.commit()
         except:
             db.rollback()
-        spot.mlevel = 11
-    return {"count":count, "last_spot_id" :spot_id}
+    return {"count":0, "last_spot_id" :spot_id}
     
+# s3에 이미지 저장을 위해 tourAPI 에서 관광지 이미지(first_image1)를 받아 다운로드
+def download_images(db: Session):
+    spot_list = db.query(SpotInfo).order_by(SpotInfo.spot_info_id.desc()).all()
+
+    if not spot_list:
+        print("spot_list가 비어 있습니다.")
+        return
+
+    for spot in spot_list:
+        print("spot.first_image:", spot.first_image) 
+        if 'tong.visitkorea' in (spot.first_image or ''):
+            image_url = spot.first_image
+            file_name = str(spot.spot_info_id) + ".png"
+
+            print("다운로드 시도 중, URL:", image_url)
+            response = requests.get(image_url, stream=True)
+
+            if response.status_code == 200:
+                try:
+                    with open(file_name, 'wb') as file:
+                        for chunk in response.iter_content(1024):
+                            file.write(chunk)
+                    print(f"이미지가 성공적으로 {file_name}으로 저장되었습니다.")
+                    spot.first_image = "https://tripeer207.s3.ap-northeast-2.amazonaws.com/spot/" + file_name
+                    db.add(spot)
+                except:
+                    continue
+            else:
+                print("이미지를 다운로드하는 데 실패했습니다. 상태 코드:", response.status_code)
+        else:
+            print("첫 번째 이미지가 유효하지 않습니다:", spot.first_image)
+    db.commit()
+    return "성공"
