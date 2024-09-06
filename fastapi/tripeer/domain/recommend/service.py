@@ -11,7 +11,7 @@ from konlpy.tag import Okt
 from sentence_transformers import SentenceTransformer, util
 
 from models import SpotInfo, SpotDetail, SpotDescription, User, Wishlist, PlanBucket
-from .variable import stop_list, city_town_list, cat2, cat3, union_values, my_keywords_list, city_id_list, lodging_reversed_dict, food_reversed_dict
+from .variable import *
 from .schema import SpotInfoResponse
 
 mongodb = get_mongo()
@@ -217,11 +217,12 @@ def get_lodging_recommend(user_id, city_id, town_id ,db: Session):
         'basic2': '콘도미니엄',
         'basic3': '유스호스텔',
         'basic4': '펜션',
-        'basic5': '모텔',
-        'basic6': '게스트하우스',
-        'basic7': '홈스테이',
-        'basic8': '서비스드레지던스',
-        'basic8': '한옥',
+        'basic5': '민박',
+        'basic6': '모텔',
+        'basic7': '게스트하우스',
+        'basic8': '홈스테이',
+        'basic9': '서비스드레지던스',
+        'basic10':'한옥',
     }
     response = {
         'basic1': [],
@@ -232,7 +233,8 @@ def get_lodging_recommend(user_id, city_id, town_id ,db: Session):
         'basic6': [],
         'basic7': [],
         'basic8': [],
-        'basic8': [],
+        'basic9': [],
+        'basic10': [],
     }
 
     if city_id == -1 and town_id == -1:
@@ -451,3 +453,114 @@ def get_more_recommend(user_id, city_id, town_id, keyword, db: Session):
         )
         res.append(spot_info_res)
     return res
+
+# 스프링에 홈 추천 pk 리스트 주기
+def get_spring_home(user_id, city_id, town_id, content_type, db: Session):
+    if content_type == 39:
+        result = get_spring_food(user_id, city_id, town_id, db)
+    elif content_type == 32:
+        result = get_spring_lodging(user_id, city_id, town_id, db)
+    else:
+        result = get_spring_recommend(user_id, city_id, town_id, db)
+    return result
+
+def get_spring_food(user_id, city_id, town_id, db: Session):
+    response = []
+    for el in food_dict:
+            
+        if city_id == -1 and town_id == -1:
+            res = db.query(SpotInfo, SpotDetail)\
+                .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+                .filter(SpotDetail.cat3 == el).limit(10).all()
+        elif city_id != -1 and town_id == -1:
+            res = db.query(SpotInfo, SpotDetail)\
+                .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+                .filter(SpotInfo.city_id == city_id)\
+                .filter(SpotDetail.cat3 == el).limit(10).all()
+        elif city_id != -1 and town_id != -1:
+            res = db.query(SpotInfo, SpotDetail)\
+                .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+                .filter(SpotInfo.city_id == city_id)\
+                .filter(SpotInfo.town_id == town_id)\
+                .filter(SpotDetail.cat3 == el).limit(10).all()
+        id_list = list(map(lambda x : x[0].spot_info_id, res))
+        response.append({'comment' : food_comment_dict[food_dict[el]], 'keyword' : food_dict[el], 'idList' : id_list})
+    return response
+
+
+def get_spring_lodging(user_id, city_id, town_id, db: Session):
+    response = []
+    for el in lodging_dict:
+        if city_id == -1 and town_id == -1:
+            res = db.query(SpotInfo, SpotDetail)\
+                .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+                .filter(SpotDetail.cat3 == el).limit(10).all()
+        elif city_id != -1 and town_id == -1:
+            res = db.query(SpotInfo, SpotDetail)\
+                .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+                .filter(SpotInfo.city_id == city_id)\
+                .filter(SpotDetail.cat3 == el).limit(10).all()
+        elif city_id != -1 and town_id != -1:
+            res = db.query(SpotInfo, SpotDetail)\
+                .join(SpotDetail, SpotInfo.spot_info_id == SpotDetail.spot_info_id)\
+                .filter(SpotInfo.city_id == city_id)\
+                .filter(SpotInfo.town_id == town_id)\
+                .filter(SpotDetail.cat3 == el).limit(10).all()
+        id_list = list(map(lambda x : x[0].spot_info_id, res))
+        response.append({'comment' : lodging_comment_dict[lodging_dict[el]], 'keyword' : lodging_dict[el], 'idList' : id_list})
+    return response
+
+def get_spring_recommend(user_id, city_id, town_id ,db: Session):
+    user = db.query(User).filter(User.user_id == user_id).first()
+    user_styles = [style for style in (user.style1, user.style2) if style]
+    keywordBlackList = user_styles
+
+    wish_list = db.query(Wishlist).filter(Wishlist.user_id == user_id).all()
+    wish_spot_ids = list(map(lambda x : x.spot_info_id, wish_list))
+    spot_descriptions = db.query(SpotDescription).filter(SpotDescription.spot_info_id.in_(wish_spot_ids)).all()
+    spot_keywords = []
+    for el in spot_descriptions: 
+        spot_keywords.extend(el.summary.split())
+    wishlist_top_two = [item for item, _ in Counter(spot_keywords).most_common(6) if item not in keywordBlackList][:2]
+    keywordBlackList += wishlist_top_two
+    
+    hot_wish_keywords_two = [item for item in hot_wish_keywords if item not in keywordBlackList][:2]
+    keywordBlackList += hot_wish_keywords_two
+
+    hot_bucket_keywords_two = [item for item in hot_bucket_keywords if item not in keywordBlackList][:2]
+    keywordBlackList += hot_bucket_keywords_two
+
+    res = []
+
+    keyword_dict = {
+        'wishlist1': (wishlist_top_two[0] if len(wishlist_top_two) > 0 else ""),
+        'wishlist2': (wishlist_top_two[1] if len(wishlist_top_two) > 1 else ""),
+        'style1': user_styles[0],
+        'style2': (user_styles[1] if len(user_styles) > 1 else ""),
+        'hotwish1': hot_wish_keywords_two[0],
+        'hotwish2': hot_wish_keywords_two[1],
+        'hotbucket1': hot_bucket_keywords_two[0],
+        'hotbucket2': hot_bucket_keywords_two[1]
+    }
+    for el in keyword_dict:
+        keyword = keyword_dict.get(el)
+        if not keyword:
+            continue
+        print(el, keyword)
+        document = collection.find_one({'city_id': city_id, 'town_id': town_id, 'keyword': keyword}, {'_id': 0, 'value': 1})
+        spot_id_list = document['value'][:10]
+        res.append({
+            "keyword": keyword,
+            "comment": recommend_comment_dict[el][0] + keyword + recommend_comment_dict[el][1],
+            "idList": spot_id_list,
+        })
+    return res
+
+def get_spring_keyword(city_id, town_id, keyword, db: Session):
+    document = collection.find_one({'city_id': city_id, 'town_id': town_id, 'keyword': keyword}, {'_id': 0, 'value': 1})
+    spot_id_list = document['value']
+    return  {
+                "keyword": keyword,
+                "comment": f"{keyword}관련 관광지",
+                "idList": spot_id_list,
+            }

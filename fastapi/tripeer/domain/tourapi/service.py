@@ -105,7 +105,7 @@ def get_spot_description(db: Session):
             count += 1
         except:
             db.rollback()
-    return {"count":count, "last_spot_id" :spot_id}
+    return {"last_spot_id" :spot_id}
 
 # tourAPI 에서 관광지 상세정보(spot_additional)를 받아 db에 저장 
 def get_deteail_info(db: Session):

@@ -53,8 +53,8 @@ def get_more_recommend(request: Request, cityId: int, townId: int, keyword: int,
     return res
 
 @router.get("/")
-def get_custom_recommend(db: Session = Depends(get_db)):
-    res = service.get_custom_recommend(6,1,1, db)
+def get_test_test(db: Session = Depends(get_db)):
+    res = service.get_spring_recommend(6,1,1, db)
     return res
 
 # 키워드 추출후 빠른 조회를 위해 모든 city, town, keywor에 대한 추천 리스트를 미리 만들어 몽고DB에 저장
@@ -63,3 +63,14 @@ def save_mongo(db: Session = Depends(get_db)):
     res = service.save_mongo(db)
     return res
 
+# 스프링에 홈 추천 pk 리스트 주기
+@router.get("/spring/home")
+def get_spring_home(userId: int, cityId: int, townId: int, contentType: int, db: Session = Depends(get_db)):
+    res = service.get_spring_home(userId, cityId, townId, contentType, db)
+    return res
+
+# 스프링에 키워드 추천 pk 리스트 주기
+@router.get("/spring/keyword")
+def get_spring_keword(cityId: int, townId: int, keyword: str, db: Session = Depends(get_db)):
+    res = service.get_spring_keyword(cityId, townId, keyword, db)
+    return res
