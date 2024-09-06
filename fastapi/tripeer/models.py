@@ -3,16 +3,6 @@ from sqlalchemy.orm import relationship
 
 from database import Base
 
-#  --------------     test      --------------------
-class Question(Base):
-    __tablename__ = "question"
-
-    id = Column(Integer, primary_key=True)
-    subject = Column(String(100), nullable=False,)
-    content = Column(String(300), nullable=False)
-    create_date = Column(DateTime, nullable=False)
-
-
 #  --------------     tourApi      --------------------
 class SpotInfo(Base):
     __tablename__ = "spot_info"
@@ -76,7 +66,7 @@ class Wishlist(Base):
 
 class PlanBucket(Base):
     __tablename__ = 'plan_bucket'
-    
+
     plan_bucket_id = Column(BigInteger, primary_key=True, autoincrement=True)
     plan_id = Column(BigInteger, nullable=False)
     spot_info_id = Column(Integer, nullable=False)
@@ -84,7 +74,7 @@ class PlanBucket(Base):
 
 #  --------------     tourApi  (추가된 상세정보)    --------------------
 class TourismDetail(Base):
-    __tablename__ = 'tourism_detail'  # 관광지 상세정보
+    __tablename__ = 'additional_tourism'  # 관광지 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)
     content_type_id = Column(Integer, nullable=False)
@@ -102,7 +92,7 @@ class TourismDetail(Base):
     use_time = Column(String(255))  # 사용 가능 시간
 
 class CultureFacilityDetail(Base):
-    __tablename__ = 'culture_facility_detail'  # 문화시설 상세정보
+    __tablename__ = 'additional_culture_facility'  # 문화시설 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)
     content_type_id = Column(Integer, nullable=False)
@@ -120,7 +110,7 @@ class CultureFacilityDetail(Base):
     spend_time = Column(String(255))  # 소요 시간
 
 class FestivalDetail(Base):
-    __tablename__ = 'festival_detail'  # 축제 상세정보
+    __tablename__ = 'additional_festival'  # 축제 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)
     content_type_id = Column(Integer, nullable=False)
@@ -144,7 +134,7 @@ class FestivalDetail(Base):
     use_time_festival = Column(String(255))  # 축제 이용 시간
 
 class LeportsDetail(Base):
-    __tablename__ = 'leports_detail'  # 레포츠 상세정보
+    __tablename__ = 'additional_leports'  # 레포츠 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)
     content_type_id = Column(Integer, nullable=False)
@@ -164,7 +154,7 @@ class LeportsDetail(Base):
     accom_count_leports = Column(String(255))  # 수용 인원 수
 
 class TourCourseDetail(Base):
-    __tablename__ = 'tour_course_detail'  # 여행코스 상세정보
+    __tablename__ = 'additional_tour_course'  # 여행코스 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)
     content_type_id = Column(Integer, nullable=False)
@@ -175,7 +165,7 @@ class TourCourseDetail(Base):
     schedule = Column(String(255))  # 일정
 
 class LodgingDetail(Base):
-    __tablename__ = 'lodging_detail'  # 숙소 상세정보
+    __tablename__ = 'additional_lodging'  # 숙소 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)
     content_type_id = Column(Integer, nullable=False)
@@ -211,7 +201,7 @@ class LodgingDetail(Base):
     benikia = Column(String(255))  # 베니키아 호텔 여부
 
 class FoodDetail(Base):
-    __tablename__ = 'food_detail'  # 음식점 상세정보
+    __tablename__ = 'additional_food'  # 음식점 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)
     content_type_id = Column(Integer, nullable=False)
@@ -233,7 +223,7 @@ class FoodDetail(Base):
     lcns_no = Column(String(255))  # 사업자 등록 번호
 
 class ShoppingDetail(Base):
-    __tablename__ = 'shopping_detail'  # 쇼핑 상세정보
+    __tablename__ = 'additional_shopping'  # 쇼핑 상세정보
     
     spot_info_id = Column(Integer, primary_key=True)  # 쇼핑 상세 정보의 고유 ID
     content_type_id = Column(Integer, nullable=False)  # 컨텐츠 타입 ID
