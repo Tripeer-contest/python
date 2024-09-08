@@ -18,6 +18,13 @@ mongodb = get_mongo()
 collection = mongodb['recommend2']
 collection.create_index([('city_id', ASCENDING), ('town_id', ASCENDING), ('keyword', ASCENDING)], unique=True)
 
+spot_collection = mongodb['spot_recommend']
+spot_collection.create_index([('spot_info_id', ASCENDING)], unique=True)
+
+distance_collection = mongodb['spot_distance']
+distance_collection.create_index([('spot_info_id', ASCENDING)], unique=True)
+
+
 model = SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS")
 okt = Okt()
 hot_wish_keywords = []
@@ -332,7 +339,7 @@ def get_food_recommend(user_id, city_id, town_id ,db: Session):
 # 각 시도, 타운, 키워드 기준 추천 리스트를 미리만들어 몽고db에 저장
 # 갯수로 저장하는 것이 아닌 정확도를 기준으로 커트해야함
 # 반복되는 부분 함수로 따로 빼기
-def save_mongo(db: Session):
+def save_mongo_keyword_sim(db: Session):
     for city_id, town_id in city_town_list:
         res = db.query(SpotInfo, SpotDescription)\
             .join(SpotDescription, SpotInfo.spot_info_id == SpotDescription.spot_info_id)\
@@ -564,3 +571,56 @@ def get_spring_keyword(city_id, town_id, keyword, db: Session):
                 "comment": f"{keyword}관련 관광지",
                 "idList": spot_id_list,
             }
+
+
+# 특정 광관지와 가장 비슷한 관광지 찾아 몽고db에 저장
+def save_mongo_spot_sim(db : Session):
+    res = db.query(SpotInfo, SpotDescription)\
+        .join(SpotDescription, SpotInfo.spot_info_id == SpotDescription.spot_info_id)\
+        .all()
+    
+    spot_summaries = [spot_description.overview for (_, spot_description) in res]
+    summary_embeddings = model.encode(spot_summaries, convert_to_tensor=True)
+    doc_list = []
+
+    for i, (_, spot_description) in enumerate(res):
+        cosine_scores = util.pytorch_cos_sim(summary_embeddings[i], summary_embeddings)[0] 
+        cosine_scores[i] = -1.0
+        top_results = torch.topk(cosine_scores, k=20)
+        top_spot_list = [res[idx][0].spot_info_id for idx in top_results[1]]
+
+        document = {
+            'spot_info_id': res[i][0].spot_info_id,  # 현재 Spot ID
+            'value': top_spot_list  # 가장 유사한 10개의 Spot ID 리스트
+        }
+        doc_list.append(document)
+    
+    spot_collection.insert_many(doc_list)
+
+
+# 특정 광관지에서 가까운 관광지 찾아 몽고db에 저장
+def save_mongo_spot_distance(db: Session):
+    res = db.query(SpotInfo).all()
+    doc_list = []
+    
+    for spot in res:
+        result = db.query(
+            SpotInfo.spot_info_id,
+            SpotInfo.latitude,
+            SpotInfo.longitude,
+            (func.pow(SpotInfo.latitude - spot.latitude, 2) +
+                 func.pow(SpotInfo.longitude - spot.longitude, 2)).label('distance')
+            ).filter(
+                SpotInfo.spot_info_id != spot.spot_info_id,
+                SpotInfo.city_id == spot.city_id,
+                SpotInfo.town_id == spot.town_id
+            ).order_by('distance').limit(20).all()
+
+        top_spot_list = [x.spot_info_id for x in result]
+        
+        document = {
+            'spot_info_id': spot.spot_info_id,
+            'value': top_spot_list
+        }
+        doc_list.append(document)
+    distance_collection.insert_many(doc_list)
