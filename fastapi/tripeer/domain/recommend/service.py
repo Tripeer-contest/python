@@ -18,6 +18,10 @@ mongodb = get_mongo()
 collection = mongodb['recommend2']
 collection.create_index([('city_id', ASCENDING), ('town_id', ASCENDING), ('keyword', ASCENDING)], unique=True)
 
+spot_collection = mongodb['spot_collection']
+spot_collection.create_index([('spot_info_id', ASCENDING)], unique=True)
+
+
 model = SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS")
 okt = Okt()
 hot_wish_keywords = []
@@ -332,7 +336,7 @@ def get_food_recommend(user_id, city_id, town_id ,db: Session):
 # 각 시도, 타운, 키워드 기준 추천 리스트를 미리만들어 몽고db에 저장
 # 갯수로 저장하는 것이 아닌 정확도를 기준으로 커트해야함
 # 반복되는 부분 함수로 따로 빼기
-def save_mongo(db: Session):
+def save_mongo_keyword_sim(db: Session):
     for city_id, town_id in city_town_list:
         res = db.query(SpotInfo, SpotDescription)\
             .join(SpotDescription, SpotInfo.spot_info_id == SpotDescription.spot_info_id)\
@@ -564,3 +568,167 @@ def get_spring_keyword(city_id, town_id, keyword, db: Session):
                 "comment": f"{keyword}관련 관광지",
                 "idList": spot_id_list,
             }
+
+
+# 특정 광관지와 가장 비슷한 관광지 찾아 몽고db에 저장
+def save_mongo_spot_sim(db : Session):
+    res = db.query(SpotInfo, SpotDescription)\
+        .join(SpotDescription, SpotInfo.spot_info_id == SpotDescription.spot_info_id)\
+        .all()
+    
+    spot_summaries = [spot_description.overview for (_, spot_description) in res]
+    summary_embeddings = model.encode(spot_summaries, convert_to_tensor=True)
+    doc_list = []
+
+    for i, (_, spot_description) in enumerate(res):
+        cosine_scores = util.pytorch_cos_sim(summary_embeddings[i], summary_embeddings)[0] 
+        cosine_scores[i] = -1.0
+        top_results = torch.topk(cosine_scores, k=20)
+        top_spot_list = [res[idx][0].spot_info_id for idx in top_results[1]]
+
+        document = {
+            'spot_info_id': res[i][0].spot_info_id,  # 현재 Spot ID
+            'value': top_spot_list  # 가장 유사한 10개의 Spot ID 리스트
+        }
+        doc_list.append(document)
+    
+    spot_collection.insert_many(doc_list)
+
+
+# 특정 광관지에서 가까운 관광지 찾아 몽고db에 저장
+def save_mongo_spot_distance(db: Session):
+    res = db.query(SpotInfo).all()
+    doc_list = []
+    
+    for spot in res:
+        result = db.query(
+            SpotInfo.spot_info_id,
+            SpotInfo.latitude,
+            SpotInfo.longitude,
+            (func.pow(SpotInfo.latitude - spot.latitude, 2) +
+                 func.pow(SpotInfo.longitude - spot.longitude, 2)).label('distance')
+            ).filter(
+                SpotInfo.spot_info_id != spot.spot_info_id,
+                SpotInfo.city_id == spot.city_id,
+                SpotInfo.town_id == spot.town_id
+            ).order_by('distance').limit(20).all()
+
+        top_spot_list = [x.spot_info_id for x in result]
+        
+        document = {
+            'spot_info_id': spot.spot_info_id,
+            'value': top_spot_list
+        }
+        doc_list.append(document)
+    # distance_collection.insert_many(doc_list)
+
+# 위 두함수를 합친 함수(비슷한, 가까운) 관광지 한번에 저장
+def save_combined_spot_info(db: Session):
+    # SpotInfo와 SpotDescription을 조인하여 결과를 가져옵니다.
+    res = db.query(SpotInfo, SpotDescription)\
+        .join(SpotDescription, SpotInfo.spot_info_id == SpotDescription.spot_info_id)\
+        .all()
+    
+    # SpotDescription의 개요를 임베딩합니다.
+    spot_summaries = [spot_description.overview for (_, spot_description) in res]
+    summary_embeddings = model.encode(spot_summaries, convert_to_tensor=True)
+    
+    # 업데이트할 문서들을 담기 위한 리스트
+    doc_list = []
+
+    for i, (_, spot_description) in enumerate(res):
+        # 유사한 관광지 찾기
+        cosine_scores = util.pytorch_cos_sim(summary_embeddings[i], summary_embeddings)[0]
+        cosine_scores[i] = -1.0  # 자기 자신과의 유사도는 무시합니다.
+        top_results = torch.topk(cosine_scores, k=10)
+        sim_spot_list = [res[idx][0].spot_info_id for idx in top_results[1]]
+
+        # 현재 관광지 정보 가져오기
+        spot = res[i][0]
+        # 가까운 관광지 찾기
+        distance_results = db.query(
+            SpotInfo.spot_info_id,
+            (func.pow(SpotInfo.latitude - spot.latitude, 2) +
+             func.pow(SpotInfo.longitude - spot.longitude, 2)).label('distance')
+        ).filter(
+            SpotInfo.spot_info_id != spot.spot_info_id,
+            SpotInfo.city_id == spot.city_id,
+            SpotInfo.town_id == spot.town_id
+        ).order_by('distance').limit(10).all()
+
+        near_spot_list = [x.spot_info_id for x in distance_results]
+        
+        # 업데이트할 문서
+        document = {
+            'spot_info_id': spot.spot_info_id,
+            'near_spot_id_list': near_spot_list,
+            'sim_spot_id_list': sim_spot_list
+        }
+        
+        # MongoDB에서 문서 업데이트 또는 삽입
+        spot_collection.update_one(
+            {'spot_info_id': spot.spot_info_id},  # 검색 조건
+            {'$set': document},  # 업데이트할 필드
+            upsert=True  # 문서가 존재하지 않으면 삽입
+        )
+
+def get_spring_plan(user_id, city_id, town_id, plan_id, db:Session):
+    user = db.query(User).filter(User.user_id == user_id).first()
+    user_styles = [style for style in (user.style1, user.style2) if style]
+    keywordBlackList = user_styles
+
+    wish_list = db.query(Wishlist).filter(Wishlist.user_id == user_id).all()
+    wish_spot_ids = list(map(lambda x : x.spot_info_id, wish_list))
+
+    bucket_list = db.query(PlanBucket).filter(PlanBucket.plan_id == plan_id).all()
+    bucket_spot_ids = list(map(lambda x : x.spot_info_id, bucket_list))
+
+    spot_descriptions = db.query(SpotDescription).filter(SpotDescription.spot_info_id.in_(wish_spot_ids)).all()
+    spot_keywords = []
+    for el in spot_descriptions: 
+        spot_keywords.extend(el.summary.split())
+    wishlist_top_two = [item for item, _ in Counter(spot_keywords).most_common(6) if item not in keywordBlackList][:2]
+
+    spot_descriptions = db.query(SpotDescription).filter(SpotDescription.spot_info_id.in_(bucket_spot_ids)).all()
+    spot_keywords = []
+    for el in spot_descriptions: 
+        spot_keywords.extend(el.summary.split())
+    bucket_top_two = [item for item, _ in Counter(spot_keywords).most_common(6) if item not in keywordBlackList][:2]
+
+    
+    keywordBlackList += wishlist_top_two
+    
+    hot_wish_keywords_two = [item for item in hot_wish_keywords if item not in keywordBlackList][:2]
+    keywordBlackList += hot_wish_keywords_two
+
+    hot_bucket_keywords_two = [item for item in hot_bucket_keywords if item not in keywordBlackList][:2]
+    keywordBlackList += hot_bucket_keywords_two
+
+    res = []
+
+    keyword_dict = {
+        'wishlist1': (wishlist_top_two[0] if len(wishlist_top_two) > 0 else ""),
+        'wishlist2': (wishlist_top_two[1] if len(wishlist_top_two) > 1 else ""),
+        'bucket1' : (bucket_top_two[0] if len(bucket_top_two) > 0 else ""),
+        'bucket2' : (bucket_top_two[1] if len(bucket_top_two) > 0 else ""),
+        'style1': user_styles[0],
+        'style2': (user_styles[1] if len(user_styles) > 1 else ""),
+        'hotwish1': hot_wish_keywords_two[0],
+        'hotwish2': hot_wish_keywords_two[1],
+        'hotbucket1': hot_bucket_keywords_two[0],
+        'hotbucket2': hot_bucket_keywords_two[1]
+    }
+
+    for el in keyword_dict:
+        keyword = keyword_dict.get(el)
+        if not keyword:
+            continue
+        print(el, keyword)
+        document = collection.find_one({'city_id': city_id, 'town_id': town_id, 'keyword': keyword}, {'_id': 0, 'value': 1})
+        spot_id_list = document['value'][:10]
+        res.append({
+            "keyword": keyword,
+            "comment": recommend_comment_dict2[el][0] + keyword + recommend_comment_dict2[el][1],
+            "idList": spot_id_list,
+        })
+    return res

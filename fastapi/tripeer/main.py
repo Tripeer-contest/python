@@ -6,6 +6,7 @@ from domain.trend import router as trend_router
 from domain.crowing import router as crowing_router
 from domain.tourapi import router as tourapi_router
 from domain.recommend import router as recommend_router
+from domain.elasticsearch import router as elasticsearch_router
 from domain.tourapi.scheduler import scheduler as tourapi_scheduler
 
 @asynccontextmanager
@@ -32,3 +33,4 @@ app.include_router(trend_router.router)
 app.include_router(crowing_router.router)
 app.include_router(tourapi_router.router)
 app.include_router(recommend_router.router)
+app.include_router(elasticsearch_router.router)

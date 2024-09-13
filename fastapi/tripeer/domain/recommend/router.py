@@ -57,10 +57,10 @@ def get_test_test(db: Session = Depends(get_db)):
     res = service.get_spring_recommend(6,1,1, db)
     return res
 
-# 키워드 추출후 빠른 조회를 위해 모든 city, town, keywor에 대한 추천 리스트를 미리 만들어 몽고DB에 저장
-@router.get("/mongo")
-def save_mongo(db: Session = Depends(get_db)):
-    res = service.save_mongo(db)
+# 키워드 추출후 빠른 조회를 위해 모든 city, town, keyword에 대한 추천 리스트를 미리 만들어 몽고DB에 저장
+@router.get("/mongo/keyword")
+def save_mongo_keyword_sim(db: Session = Depends(get_db)):
+    res = service.save_mongo_keyword_sim(db)
     return res
 
 # 스프링에 홈 추천 pk 리스트 주기
@@ -73,4 +73,28 @@ def get_spring_home(userId: int, cityId: int, townId: int, contentType: int, db:
 @router.get("/spring/keyword")
 def get_spring_keword(cityId: int, townId: int, keyword: str, db: Session = Depends(get_db)):
     res = service.get_spring_keyword(cityId, townId, keyword, db)
+    return res
+
+# 스프링에 플랜 추천 pk 리스트 주기
+@router.get("/spring/plan")
+def get_spring_home(userId: int, cityId: int, townId: int,planId: int, db: Session = Depends(get_db)):
+    res = service.get_spring_plan(userId, cityId, townId, planId, db)
+    return res
+
+# 특정 광관지와 가장 비슷한 관광지 찾아 몽고db에 저장
+@router.get("/mongo/spot")
+def save_mongo_spot_sim(db: Session = Depends(get_db)):
+    res = service.save_mongo_spot_sim(db)
+    return res
+
+# 특정 광관지와 가장 거리가 가까운 관광지 찾아 몽고db에 저장
+@router.get("/mongo/distance")
+def save_mongo_spot_distance(db: Session = Depends(get_db)):
+    res = service.save_mongo_spot_distance(db)
+    return res
+
+# 
+@router.get("/mongo/com")
+def save_mongo_spot_com(db: Session = Depends(get_db)):
+    res = service.save_combined_spot_info(db)
     return res
