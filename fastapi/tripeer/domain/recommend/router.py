@@ -75,6 +75,12 @@ def get_spring_keword(cityId: int, townId: int, keyword: str, db: Session = Depe
     res = service.get_spring_keyword(cityId, townId, keyword, db)
     return res
 
+# 스프링에 플랜 추천 pk 리스트 주기
+@router.get("/spring/plan")
+def get_spring_home(userId: int, cityId: int, townId: int,planId: int, db: Session = Depends(get_db)):
+    res = service.get_spring_plan(userId, cityId, townId, planId, db)
+    return res
+
 # 특정 광관지와 가장 비슷한 관광지 찾아 몽고db에 저장
 @router.get("/mongo/spot")
 def save_mongo_spot_sim(db: Session = Depends(get_db)):
@@ -85,4 +91,10 @@ def save_mongo_spot_sim(db: Session = Depends(get_db)):
 @router.get("/mongo/distance")
 def save_mongo_spot_distance(db: Session = Depends(get_db)):
     res = service.save_mongo_spot_distance(db)
+    return res
+
+# 
+@router.get("/mongo/com")
+def save_mongo_spot_com(db: Session = Depends(get_db)):
+    res = service.save_combined_spot_info(db)
     return res
